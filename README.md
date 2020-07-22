@@ -7,7 +7,7 @@ mixed (depth 10) matrix is created for normalization procedures.
   * [Installation](#installation)
   * [Running GammaGammaHistograms](#running-gammagammahistograms)
   * [Helper scripts](#helper-scripts)
-    + [MakeGammaGammaHistograms.sh](#makegammagammahistograms)
+    + [MakeGammaGammaHistograms.sh](#makegammagammahistogramssh)
 
 # Installation
 0. Requires GRSISort 4.X.X
@@ -47,7 +47,7 @@ Included is a helper script that makes building histograms easier.
 ### MakeGammaGammaHistograms.sh
 This script takes a run and optionally a batch size.
 ```
-./MakeGammaGammaHistograms.sh run_number batch_size
+./MakeGammaGammaHistograms.sh run_number [batch_size]
 ```
 where
 ```
@@ -66,4 +66,4 @@ batch   subruns
 6       015-016
 ```
 
-If you do not pass a batch size the script will collects all subruns and pass them to the histogram sorting function. 
+If you do not pass a batch size the script will collects all subruns and pass them to the histogram sorting function.
