@@ -23,8 +23,9 @@
 //#include "TGRSIRunInfo.h"
 
 #include "progress_bar.h"
-#include "GammaGammaAnalysis.h"
+#include "GammaGammaHistograms.h"
 #include "Notifier.h"
+#include "LoadingMessenger.h"
 
 Notifier *notifier = new Notifier;
 /************************************************************//**
@@ -114,7 +115,8 @@ int ProcessData(){
 
 
 	// display loading message
-	DisplayLoadingMessage();
+    LoadingMessenger load_man;
+	load_man.DisplayLoadingMessage();
 
 
 	/* Creates a progress bar that has a width of 70,
@@ -123,36 +125,43 @@ int ProcessData(){
 	 */
 	ProgressBar progress_bar(analysis_entries, 70, '=', ' ');
 	//for (auto i = 0; i < analysis_entries/10000; i++) {
+    TGriffinHit *grif_hit;
+    TH2D *sum_hist = new TH2D("sum_hist", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
+    TH2D *sum_hist_mixed = new TH2D("sum_hist_mixed", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
 	for (auto i = 0; i < analysis_entries; i++) {
 		// retrieve entries from trees
 		gChain->GetEntry(i);
 
 		// Filling required Lists and preproccessing data
 		for (auto j = 0; j < fGrif->GetSuppressedMultiplicity(fGriffinBgo); ++j) {
-			det = fGrif->GetSuppressedHit(j)->GetArrayNumber();
-			if(fGrif->GetSuppressedHit(j)->GetKValue()!=700) {continue;} // removes GRIFFIN hits pileup events
-			// Applying energy calibration
-			//energyTmp = offset[det-1] + gain[det-1]*fGrif->GetSuppressedHit(i)->GetCharge() + non_lin[det-1]*fGrif->GetSuppressedHit(i)->GetCharge()*fGrif->GetSuppressedHit(i)->GetCharge();
-			//energyTmp += ((double) rand() / RAND_MAX - 0.5);
-			energyTmp = fGrif->GetSuppressedHit(j)->GetEnergy();
+            grif_hit = fGrif->GetSuppressedHit(j);
+			det = grif_hit->GetArrayNumber() - 1;
+			if(grif_hit->GetKValue()!=700) {continue;} // removes GRIFFIN hits pileup events
+			energy_temp = grif_hit->GetEnergy();
+            // skipping duplicate events
+            if (abs(energy_temp - duplicate_check_energy[det]) < 0.3) { continue; }
+            duplicate_check_energy[det] = energy_temp;
 
-			suppr_en.push_back(energyTmp);
-			pos.push_back(fGrif->GetSuppressedHit(j)->GetPosition(145.0));
-			gamma_time.push_back(fGrif->GetSuppressedHit(j)->GetTime());
-	//		detector_vec.push_back(det);
+            // Add small randomness to allow for rebinning
+			energy_temp += ((double) rand() / RAND_MAX - 0.5);
+
+			energy_vec.push_back(energy_temp);
+			pos_vec.push_back(grif_hit->GetPosition(145.0));
+			time_vec.push_back(grif_hit->GetTime());
+			//detector_vec.push_back(det);
 		}
 
 		// Filling histograms
-		for (unsigned int g1 = 0; g1 < suppr_en.size(); ++g1) {
+		for (unsigned int g1 = 0; g1 < energy_vec.size(); ++g1) {
 			// gamma-gamma matrices
-			for(unsigned int g2 = 0; g2 < suppr_en.size(); ++g2) {
+			for(unsigned int g2 = 0; g2 < energy_vec.size(); ++g2) {
 				if (g1 == g2) continue;
 
-				double angle = pos.at(g1).Angle(pos.at(g2)) * 180. / TMath::Pi();
+				double angle = pos_vec.at(g1).Angle(pos_vec.at(g2)) * 180. / TMath::Pi();
 				if (angle < 0.0001) continue;
 
 				int angleIndex = GetAngleIndex(angle, fAngleCombinations);
-				double ggTime = TMath::Abs(gamma_time.at(g1) - gamma_time.at(g2));
+				double ggTime = TMath::Abs(time_vec.at(g1) - time_vec.at(g2));
 
 				// check for bad angles
 				if (angleIndex == -1) {
@@ -171,25 +180,27 @@ int ProcessData(){
 
 				// Filling histogram
 				if (ggTime < ggHigh) {
-					myhist->Fill(suppr_en.at(g1), suppr_en.at(g2));
+					myhist->Fill(energy_vec.at(g1), energy_vec.at(g2));
+					sum_hist->Fill(energy_vec.at(g1), energy_vec.at(g2));
 					//dT_coin->Fill(ggTime);
-					//myhist->Fill(suppr_en.at(g2), suppr_en.at(g1));
+					//myhist->Fill(energy_vec.at(g2), energy_vec.at(g1));
 				}
 				else if (bgLow < ggTime && ggTime < bgHigh) {
-					myhist->Fill(suppr_en.at(g1), suppr_en.at(g2), -ggHigh/(bgHigh-bgLow));
-					//myhist->Fill(suppr_en.at(g2), suppr_en.at(g1), -ggHigh/(bgHigh-bgLow));
+					myhist->Fill(energy_vec.at(g1), energy_vec.at(g2), -ggHigh/(bgHigh-bgLow));
+					sum_hist->Fill(energy_vec.at(g1), energy_vec.at(g2), -ggHigh/(bgHigh-bgLow));
+					//myhist->Fill(energy_vec.at(g2), energy_vec.at(g1), -ggHigh/(bgHigh-bgLow));
 				}
 			} // grif2
 
 			// EVENT MIXED MATRICES
 			// event mixing, we use the last event as second griffin
-			checkMix = (int)lastgrifEnergy.size();
+			checkMix = (int)last_grif_energy.size();
 			if(checkMix<event_mixing_depth) continue;
 			for(auto lg = 0; lg < (checkMix - 1); ++lg) {
-				unsigned int multLG = lastgrifEnergy.at(lg).size();
+				unsigned int multLG = last_grif_energy.at(lg).size();
 
 				for(unsigned int g3 = 0; g3 < multLG; ++g3) {
-					double angle = pos.at(g1).Angle(lastgrifPosition.at(lg).at(g3)) * 180. / TMath::Pi();
+					double angle = pos_vec.at(g1).Angle(last_grif_position.at(lg).at(g3)) * 180. / TMath::Pi();
 					if (angle < 0.0001) continue;
 					int angleIndex = GetAngleIndex(angle, fAngleCombinations);
 
@@ -203,11 +214,12 @@ int ProcessData(){
 					} // !myhist
 
 					// Filling histogram
-				myhist->Fill(suppr_en.at(g1), lastgrifEnergy.at(lg).at(g3));
+				myhist->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
+				sum_hist_mixed->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
 				} // end g3
 			} //end LG
 
-		} // grif1
+		} // grif_hit
 
 		if (i % 10000 == 0) {
 			progress_bar.display();
@@ -215,18 +227,18 @@ int ProcessData(){
 		++progress_bar; // iterates progress_bar
 
 		// update "last" event
-		lastgrifEnergy.push_back(suppr_en);
-		lastgrifPosition.push_back(pos);
-		lgsize = static_cast<int>(lastgrifEnergy.size());
+		last_grif_energy.push_back(energy_vec);
+		last_grif_position.push_back(pos_vec);
+		lgsize = static_cast<int>(last_grif_energy.size());
 		if (lgsize > event_mixing_depth){
-			lastgrifEnergy.erase(lastgrifEnergy.begin());
-			lastgrifPosition.erase(lastgrifPosition.begin());
+			last_grif_energy.erase(last_grif_energy.begin());
+			last_grif_position.erase(last_grif_position.begin());
 		}
 
 		// cleaning up for next event
-		suppr_en.clear();
-		pos.clear();
-		gamma_time.clear();
+		energy_vec.clear();
+		pos_vec.clear();
+		time_vec.clear();
 		//detector_vec.clear();
 	} // end fill loop
 
@@ -246,37 +258,16 @@ int ProcessData(){
 	dir_Mixed->cd();
 	gammaGammaMixedList.Compress();
 	gammaGammaMixedList.Write();
+	TDirectory* sum_dir = out_file->mkdir("SumHistograms");
+    sum_dir->cd();
+    sum_hist->Write();
+    sum_hist_mixed->Write();
+
 	out_file->Write();
 	delete out_file;
 
 	return 0;
 } // ProcessData
-
-/************************************************************//**
- * Displays humourous loading message
- *
- ***************************************************************/
-void DisplayLoadingMessage() {
-
-	std::string line;
-	int random = 0;
-	int numOfLines = 0;
-	std::ifstream File("loadingQuotes.txt");
-
-	int count = 1;
-	random = rand() % 131;
-
-	while(getline(File, line))
-	{
-		++numOfLines;
-
-		if(numOfLines == random)
-		{
-			std::cout << line << std::endl;
-		}
-	}
-	count++;
-} // DisplayLoadingMessage
 
 ///******************************************************************************
 // * Returns the angular index
@@ -378,8 +369,8 @@ void OpenRootFile(std::string fileName){
  * Prints usage message and version
  *****************************************************************************/
 void PrintUsage(char* argv[]){
-	std::cerr << argv[0] << " Version: " << GammaGammaAnalysis_VERSION_MAJOR
-	          << "." << GammaGammaAnalysis_VERSION_MINOR << "\n"
+	std::cerr << argv[0] << " Version: " << GammaGammaHistograms_VERSION_MAJOR
+	          << "." << GammaGammaHistograms_VERSION_MINOR << "\n"
 	          << "usage: " << argv[0] << " calibration_file analysis_tree [analysis_tree_2 ... ]\n"
 	          << " calibration_file: calibration file (must end with .cal)\n"
 	          << " analysis_tree:    analysis tree to convert (must end with .root)"

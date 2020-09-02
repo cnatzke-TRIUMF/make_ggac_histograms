@@ -42,10 +42,6 @@ file(GLOB SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
 # Naming main executable
 add_executable(GammaGammaHistograms ${SOURCES})
 
-add_custom_command(TARGET GammaGammaHistograms PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-${PROJECT_SOURCE_DIR}/misc/ $<TARGET_FILE_DIR:GammaGammaHistograms>)
-
 # linking libraries
 target_link_libraries(GammaGammaHistograms PUBLIC
    ${GRSI_CONFIG}
