@@ -3,18 +3,21 @@
 #------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.2)
 
-project(GammaGammaHistograms VERSION 0.1)
+project(ggac_histograms VERSION 0.1)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+# add root libraries (this needs to be done after the project name has been defined!)
+find_package(ROOT REQUIRED)
 
 # configure header file
-configure_file(GammaGammaHistograms.h.in GammaGammaHistograms.h)
+configure_file(ggac_histograms.h.in ggac_histograms.h)
 
 set(CMAKE_C_COMPILER "gcc")
 set(CMAKE_CXX_COMPILER "g++")
 
 set(CMAKE_CXX_FLAGS "-Wall -O3 ${CMAKE_CXX_FLAGS} ${GRSI_CONFIG}")
+
+# pick up c++ standard from ROOT install
+string(APPEND CMAKE_CXX_FLAGS "${ROOT_CXX_FLAGS} -pedantic -Wall -Wno-long-long -g -O3")
 
 # Connect ROOT to project
 list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
@@ -40,22 +43,22 @@ execute_process(COMMAND grsi-config --all-libs --GRSIData-libs --root
 file(GLOB SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # Naming main executable
-add_executable(GammaGammaHistograms ${SOURCES})
+add_executable(ggac_histograms ${SOURCES})
 
 # linking libraries
-target_link_libraries(GammaGammaHistograms PUBLIC
+target_link_libraries(ggac_histograms PUBLIC
    ${GRSI_CONFIG}
 )
 
 # add the binary tree to the search path for include files so that we will find AnalysisTreeConverter.h
-target_include_directories(GammaGammaHistograms PUBLIC
+target_include_directories(ggac_histograms PUBLIC
     "${PROJECT_BINARY_DIR}"
     "${GRSI_INCLUDE_DIRS}"
     include
     )
 
 # add install targets
-install(TARGETS GammaGammaHistograms DESTINATION "${PROJECT_BINARY_DIR}/bin")
-install(FILES "${PROJECT_BINARY_DIR}/GammaGammaHistograms.h"
+install(TARGETS ggac_histograms DESTINATION "${PROJECT_BINARY_DIR}/bin")
+install(FILES "${PROJECT_BINARY_DIR}/ggac_histograms.h"
    DESTINATION "${PROJECT_BINARY_DIR}/include"
 )
