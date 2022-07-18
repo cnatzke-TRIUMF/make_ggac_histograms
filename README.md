@@ -13,11 +13,11 @@ mixed (depth 10) matrix is created for normalization procedures.
 0. Requires GRSISort 4.X.X
 1. Get the code, either via tarball or from github
 ```
-git clone https://github.com/cnatzke/MakeGammaGammaHistograms.git
+git clone https://github.com/cnatzke/make_ggac_histograms.git
 ```
 2. Build program using standard cmake process, e.g.
 ```
-mkdir myBuild && cd myBuild
+mkdir build && cd build
 cmake ..
 make
 ```
@@ -26,7 +26,7 @@ make
 # Running MakeGammaGammaHistograms
 The general form of input is:
 ```
-./GammaGammaHistograms analysis_tree [analysis_tree_2 ... ] calibration_file
+./ggac_histograms analysis_tree [analysis_tree_2 ... ] calibration_file
 ```
 
 ##### Parameters
