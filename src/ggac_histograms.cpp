@@ -141,8 +141,8 @@ int ProcessData()
 	ProgressBar progress_bar(analysis_entries, 70, '=', ' ');
 	// for (auto i = 0; i < analysis_entries/10000; i++) {
 	TGriffinHit *grif_hit;
-	TH2D *sum_hist = new TH2D("sum_hist", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
-	TH2D *sum_hist_mixed = new TH2D("sum_hist_mixed", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
+	TH2D *hist = new TH2D("gg", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
+	TH2D *hist_mixed = new TH2D("gg_mixed", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
 	for (auto i = 0; i < analysis_entries; i++)
 	{
 		// retrieve entries from trees
@@ -166,10 +166,10 @@ int ProcessData()
 			duplicate_check_energy[det] = energy_temp;
 
 			// Add small randomness to allow for rebinning
-			energy_temp += ((double)rand() / RAND_MAX - 0.5);
+			// energy_temp += ((double)rand() / RAND_MAX - 0.5);
 
 			energy_vec.push_back(energy_temp);
-			pos_vec.push_back(grif_hit->GetPosition(145.0));
+			pos_vec.push_back(grif_hit->GetPosition(110.0));
 			time_vec.push_back(grif_hit->GetTime());
 			// detector_vec.push_back(det);
 		}
@@ -203,23 +203,23 @@ int ProcessData()
 					myhist = ((TH2F *)(gammaGammaSubList.At(angleIndex)));
 				if (!myhist)
 				{
-					myhist = new TH2F(TString::Format("gammaGammaSub%i", angleIndex), Form("%.1f deg #gamma-#gamma, time-random-bg subtracted", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
+					myhist = new TH2F(TString::Format("gg_%i", angleIndex), Form("%.1f deg #gamma-#gamma, time-random-bg subtracted", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
 					myhist->Sumw2(); // setting so errors are properly calculated
 					gammaGammaSubList.AddAtAndExpand(myhist, angleIndex);
-				} // !myhist
+				}
 
 				// Filling histogram
 				if (ggTime < ggHigh)
 				{
 					myhist->Fill(energy_vec.at(g1), energy_vec.at(g2));
-					sum_hist->Fill(energy_vec.at(g1), energy_vec.at(g2));
+					hist->Fill(energy_vec.at(g1), energy_vec.at(g2));
 					// dT_coin->Fill(ggTime);
 					// myhist->Fill(energy_vec.at(g2), energy_vec.at(g1));
 				}
 				else if (bgLow < ggTime && ggTime < bgHigh)
 				{
 					myhist->Fill(energy_vec.at(g1), energy_vec.at(g2), -ggHigh / (bgHigh - bgLow));
-					sum_hist->Fill(energy_vec.at(g1), energy_vec.at(g2), -ggHigh / (bgHigh - bgLow));
+					hist->Fill(energy_vec.at(g1), energy_vec.at(g2), -ggHigh / (bgHigh - bgLow));
 					// myhist->Fill(energy_vec.at(g2), energy_vec.at(g1), -ggHigh/(bgHigh-bgLow));
 				}
 			} // grif2
@@ -241,19 +241,19 @@ int ProcessData()
 					int angleIndex = GetAngleIndex(angle, fAngleCombinations);
 
 					// Generating/Retrieving histograms
-					TH2F *myhist = ((TH2F *)0);
+					TH2F *index_hist_mixed = ((TH2F *)0);
 					if (angleIndex < gammaGammaMixedList.GetSize())
-						myhist = ((TH2F *)(gammaGammaMixedList.At(angleIndex)));
-					if (!myhist)
+						index_hist_mixed = ((TH2F *)(gammaGammaMixedList.At(angleIndex)));
+					if (!index_hist_mixed)
 					{
-						myhist = new TH2F(TString::Format("gammaGammaMixed%i", angleIndex), Form("%.1f deg #gamma-#gamma, event-mixed", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
-						myhist->Sumw2(); // setting so errors are properly calculated
-						gammaGammaMixedList.AddAtAndExpand(myhist, angleIndex);
-					} // !myhist
+						index_hist_mixed = new TH2F(TString::Format("gg_mixed_%i", angleIndex), Form("%.1f deg #gamma-#gamma, event-mixed", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
+						index_hist_mixed->Sumw2(); // setting so errors are properly calculated
+						gammaGammaMixedList.AddAtAndExpand(index_hist_mixed, angleIndex);
+					}
 
 					// Filling histogram
-					myhist->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
-					sum_hist_mixed->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
+					index_hist_mixed->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
+					hist_mixed->Fill(energy_vec.at(g1), last_grif_energy.at(lg).at(g3));
 				} // end g3
 			}	  // end LG
 
@@ -285,23 +285,21 @@ int ProcessData()
 	progress_bar.done();
 
 	// Writing histograms to file
-	TFile *out_file = new TFile(Form("gg_%i_histograms.root", run_number), "RECREATE");
+	TFile *out_file = new TFile("gg_histograms.root", "RECREATE");
 	std::cout << "Writing output file: " << out_file->GetName() << std::endl;
 
 	out_file->cd();
 
-	TDirectory *dir_TRS = out_file->mkdir("TimeRandomSubtracted");
+	TDirectory *dir_TRS = out_file->mkdir("time-random-subtracted");
 	dir_TRS->cd();
-	gammaGammaSubList.Compress();
-	gammaGammaSubList.Write();
-	TDirectory *dir_Mixed = out_file->mkdir("EventMixed");
+	gammaGammaSubList.Write("", TObject::kOverwrite);
+	TDirectory *dir_Mixed = out_file->mkdir("event-mixed");
 	dir_Mixed->cd();
-	gammaGammaMixedList.Compress();
-	gammaGammaMixedList.Write();
-	TDirectory *sum_dir = out_file->mkdir("SumHistograms");
+	gammaGammaMixedList.Write("", TObject::kOverwrite);
+	TDirectory *sum_dir = out_file->mkdir("sum");
 	sum_dir->cd();
-	sum_hist->Write();
-	sum_hist_mixed->Write();
+	hist->Write();
+	hist_mixed->Write();
 
 	out_file->Write();
 	delete out_file;
@@ -309,12 +307,12 @@ int ProcessData()
 	return 0;
 } // ProcessData
 
-///******************************************************************************
-// * Returns the angular index
-// *
-// * @param angle The angle between two gammas
-// * @param vec Vector of angles
-// *****************************************************************************/
+/******************************************************************************
+ * Returns the angular index
+ *
+ * @param angle The angle between two gammas
+ * @param vec Vector of angles
+ *****************************************************************************/
 int GetAngleIndex(double angle, std::vector<double> vec)
 {
 
@@ -365,15 +363,15 @@ int GetAngleIndex(double angle, std::vector<double> vec)
 	return mid;
 } // GetAngleIndex
 
-///******************************************************************************
-// * Returns the value closest to the target
-// * Assumes val2 is greater than val1 and target lies inbetween the two
-// *
-// * @param val1 First value to compare
-// * @param val2 Second value to compare
-// * @param vec Vector of values
-// * @param target Target value
-// *****************************************************************************/
+/******************************************************************************
+ * Returns the value closest to the target
+ * Assumes val2 is greater than val1 and target lies inbetween the two
+ *
+ * @param val1 First value to compare
+ * @param val2 Second value to compare
+ * @param vec Vector of values
+ * @param target Target value
+ *****************************************************************************/
 int GetClosest(int val1, int val2, std::vector<double> vec, double target)
 {
 	if ((target - vec[val1]) >= (vec[val2] - target))
@@ -405,12 +403,12 @@ void AutoFileDetect(std::string fileName)
 	}
 } // End AutoFileDetect
 
-/************************************************************/ /**
-																* Opens Root files
-																*
-																* @param dir_name   Directory name
-																* @param ext        Extension of the files (default = ".root")
-																***************************************************************/
+/**************************************************************
+ * Opens Root files
+ *
+ * @param dir_name   Directory name
+ * @param ext        Extension of the files (default = ".root")
+ ***************************************************************/
 void OpenRootFile(std::string fileName)
 {
 	TFile f(fileName.c_str());
