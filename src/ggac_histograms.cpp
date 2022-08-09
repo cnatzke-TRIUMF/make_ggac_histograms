@@ -141,8 +141,8 @@ int ProcessData()
 	TGriffinHit *grif_hit;
 	TH2D *hist = new TH2D("gg", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
 	TH2D *hist_mixed = new TH2D("gg_mixed", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
-	for (auto i = 0; i < analysis_entries / 100; i++)
-	// for (auto i = 0; i < analysis_entries; i++)
+	// for (auto i = 0; i < analysis_entries / 100; i++)
+	for (auto i = 0; i < analysis_entries; i++)
 	{
 		// retrieve entries from trees
 		gChain->GetEntry(i);
@@ -187,7 +187,6 @@ int ProcessData()
 					continue;
 
 				int angleIndex = GetAngleIndex(angle);
-				std::cout << "Angle: " << angle << " Index: " << angleIndex << " Map: " << fAngleMap[angleIndex].first << std::endl;
 				double ggTime = TMath::Abs(time_vec.at(g1) - time_vec.at(g2));
 
 				// check for bad angles
@@ -340,7 +339,7 @@ int GetAngleIndex(double angle)
 		mid = (i + j) / 2;
 
 		if (vec[mid] == angle)
-			return vec[mid];
+			return mid;
 
 		// searching left half
 		if (angle < vec[mid])
@@ -366,6 +365,7 @@ int GetAngleIndex(double angle)
 			i = mid + 1;
 		}
 	}
+	vec.clear();
 	// Only single element left after search
 	return mid;
 } // GetAngleIndex
@@ -375,6 +375,7 @@ int GetAngleIndex(double angle)
  *****************************************************************************/
 void GenerateAngleMap(double distance)
 {
+	double rad_to_degree = 180. / TMath::Pi();
 	std::vector<double> angle;
 	for (int first_det = 1; first_det < 16; first_det++)
 	{
@@ -386,7 +387,7 @@ void GenerateAngleMap(double distance)
 				{
 					if (first_det == second_det && first_cry == second_cry)
 						continue;
-					angle.push_back(TGriffin::GetPosition(first_det, first_cry, distance).Angle(TGriffin::GetPosition(second_det, second_cry, distance)));
+					angle.push_back(TGriffin::GetPosition(first_det, first_cry, distance).Angle(TGriffin::GetPosition(second_det, second_cry, distance)) * rad_to_degree);
 				}
 			}
 		}
