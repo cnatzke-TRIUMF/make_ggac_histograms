@@ -87,7 +87,6 @@ int main(int argc, char **argv)
 int ProcessData()
 {
 	std::string fName = gChain->GetCurrentFile()->GetName();
-	int run_number = GetRunNumber(fName.c_str());
 	TObjArray gammaGammaSubList(0);
 	TObjArray gammaGammaMixedList(0);
 
@@ -99,8 +98,8 @@ int ProcessData()
 	float gLow = 0.;
 	float gHigh = gbin;
 
-	std::cout << "Processing run " << run_number << " with " << gChain->GetNtrees() << " file(s)" << std::endl;
-
+	double distance = 110.;
+	GenerateAngleMap(distance);
 	long analysis_entries = gChain->GetEntries();
 
 	if (gChain->FindBranch("TGriffin"))
@@ -139,11 +138,11 @@ int ProcessData()
 	 * space for incomplete
 	 */
 	ProgressBar progress_bar(analysis_entries, 70, '=', ' ');
-	// for (auto i = 0; i < analysis_entries/10000; i++) {
 	TGriffinHit *grif_hit;
 	TH2D *hist = new TH2D("gg", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
 	TH2D *hist_mixed = new TH2D("gg_mixed", "", gbin, gLow, gHigh, gbin, gLow, gHigh);
-	for (auto i = 0; i < analysis_entries; i++)
+	for (auto i = 0; i < analysis_entries / 100; i++)
+	// for (auto i = 0; i < analysis_entries; i++)
 	{
 		// retrieve entries from trees
 		gChain->GetEntry(i);
@@ -187,7 +186,8 @@ int ProcessData()
 				if (angle < 0.0001)
 					continue;
 
-				int angleIndex = GetAngleIndex(angle, fAngleCombinations);
+				int angleIndex = GetAngleIndex(angle);
+				std::cout << "Angle: " << angle << " Index: " << angleIndex << " Map: " << fAngleMap[angleIndex].first << std::endl;
 				double ggTime = TMath::Abs(time_vec.at(g1) - time_vec.at(g2));
 
 				// check for bad angles
@@ -203,7 +203,7 @@ int ProcessData()
 					myhist = ((TH2F *)(gammaGammaSubList.At(angleIndex)));
 				if (!myhist)
 				{
-					myhist = new TH2F(TString::Format("gg_%i", angleIndex), Form("%.1f deg #gamma-#gamma, time-random-bg subtracted", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
+					myhist = new TH2F(TString::Format("gg_%i", angleIndex), Form("%.1f deg #gamma-#gamma, time-random-bg subtracted", fAngleMap[angleIndex].first), gbin, gLow, gHigh, gbin, gLow, gHigh);
 					myhist->Sumw2(); // setting so errors are properly calculated
 					gammaGammaSubList.AddAtAndExpand(myhist, angleIndex);
 				}
@@ -238,7 +238,7 @@ int ProcessData()
 					double angle = pos_vec.at(g1).Angle(last_grif_position.at(lg).at(g3)) * 180. / TMath::Pi();
 					if (angle < 0.0001)
 						continue;
-					int angleIndex = GetAngleIndex(angle, fAngleCombinations);
+					int angleIndex = GetAngleIndex(angle);
 
 					// Generating/Retrieving histograms
 					TH2F *index_hist_mixed = ((TH2F *)0);
@@ -246,7 +246,7 @@ int ProcessData()
 						index_hist_mixed = ((TH2F *)(gammaGammaMixedList.At(angleIndex)));
 					if (!index_hist_mixed)
 					{
-						index_hist_mixed = new TH2F(TString::Format("gg_mixed_%i", angleIndex), Form("%.1f deg #gamma-#gamma, event-mixed", fAngleCombinations[angleIndex]), gbin, gLow, gHigh, gbin, gLow, gHigh);
+						index_hist_mixed = new TH2F(TString::Format("gg_mixed_%i", angleIndex), Form("%.1f deg #gamma-#gamma, event-mixed", fAngleMap[angleIndex].first), gbin, gLow, gHigh, gbin, gLow, gHigh);
 						index_hist_mixed->Sumw2(); // setting so errors are properly calculated
 						gammaGammaMixedList.AddAtAndExpand(index_hist_mixed, angleIndex);
 					}
@@ -313,8 +313,15 @@ int ProcessData()
  * @param angle The angle between two gammas
  * @param vec Vector of angles
  *****************************************************************************/
-int GetAngleIndex(double angle, std::vector<double> vec)
+int GetAngleIndex(double angle)
 {
+
+	// first extract angles
+	std::vector<double> vec;
+	for (auto const &iter : fAngleMap)
+	{
+		vec.push_back(iter.first);
+	}
 
 	// corner cases
 	if (angle <= vec.front())
@@ -341,7 +348,7 @@ int GetAngleIndex(double angle, std::vector<double> vec)
 			// if angle is greater than previous to mid, return closest of two
 			if (mid > 0 && angle > vec[mid - 1])
 			{
-				return GetClosest(mid - 1, mid, fAngleCombinations, angle);
+				return GetClosest(mid - 1, mid, vec, angle);
 			}
 
 			// repeat for left half
@@ -352,7 +359,7 @@ int GetAngleIndex(double angle, std::vector<double> vec)
 		{
 			if (mid < vec.size() - 1 && angle < vec[mid + 1])
 			{
-				return GetClosest(mid, mid + 1, fAngleCombinations, angle);
+				return GetClosest(mid, mid + 1, vec, angle);
 			}
 
 			// update i
@@ -362,6 +369,49 @@ int GetAngleIndex(double angle, std::vector<double> vec)
 	// Only single element left after search
 	return mid;
 } // GetAngleIndex
+
+/******************************************************************************
+ * Calculates angle combinations
+ *****************************************************************************/
+void GenerateAngleMap(double distance)
+{
+	std::vector<double> angle;
+	for (int first_det = 1; first_det < 16; first_det++)
+	{
+		for (int first_cry = 0; first_cry < 4; first_cry++)
+		{
+			for (int second_det = 1; second_det < 16; second_det++)
+			{
+				for (int second_cry = 0; second_cry < 4; second_cry++)
+				{
+					if (first_det == second_det && first_cry == second_cry)
+						continue;
+					angle.push_back(TGriffin::GetPosition(first_det, first_cry, distance).Angle(TGriffin::GetPosition(second_det, second_cry, distance)));
+				}
+			}
+		}
+	}
+
+	// sort so we can count how many instances there are
+	std::sort(angle.begin(), angle.end());
+	size_t r;
+	for (size_t a = 0; a < angle.size(); a++)
+	{
+		for (r = 0; r < fAngleMap.size(); r++)
+		{
+			// check if angles are the same
+			if (angle[a] >= fAngleMap[r].first - 0.001 && angle[a] <= fAngleMap[r].first + 0.001)
+			{
+				(fAngleMap[r].second)++;
+				break;
+			}
+		}
+		if (fAngleMap.size() == 0 || r == fAngleMap.size())
+		{
+			fAngleMap.push_back(std::make_pair(angle[a], 1));
+		}
+	}
+}
 
 /******************************************************************************
  * Returns the value closest to the target

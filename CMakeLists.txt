@@ -8,9 +8,6 @@ project(ggac_histograms VERSION 0.1)
 # add root libraries (this needs to be done after the project name has been defined!)
 find_package(ROOT REQUIRED)
 
-# configure header file
-configure_file(ggac_histograms.h.in ggac_histograms.h)
-
 set(CMAKE_C_COMPILER "gcc")
 set(CMAKE_CXX_COMPILER "g++")
 
